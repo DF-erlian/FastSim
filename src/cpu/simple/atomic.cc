@@ -88,6 +88,13 @@ AtomicSimpleCPU::AtomicSimpleCPU(const BaseAtomicSimpleCPUParams &p)
     data_read_req = std::make_shared<Request>();
     data_write_req = std::make_shared<Request>();
     data_amo_req = std::make_shared<Request>();
+
+
+    //open file trace.txt in write mdoe
+    tptr = fopen("trace.txt", "w");
+    if(tptr == NULL){
+        printf("Could not open file");
+    }
 }
 
 
@@ -373,6 +380,10 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t *data, unsigned size,
 
     req->taskId(taskId());
 
+    for(int i = 0; i < 4; i++){
+        req->writebacks[i] = 0;
+    }
+
     Addr frag_addr = addr;
     int frag_size = 0;
     int size_left = size;
@@ -386,7 +397,7 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t *data, unsigned size,
         // translate to physical address
         if (predicate) {
             fault = thread->mmu->translateAtomic(req, thread->getTC(),
-                                                 BaseMMU::Read);
+                                                 BaseMMU::Read, dw_depths, dw_addrs);
         }
 
         // Now do the access.
@@ -401,6 +412,13 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t *data, unsigned size,
                 dcache_latency += sendPacket(dcachePort, &pkt);
             }
             dcache_access = true;
+
+            d_addr = addr;
+            d_size = size;
+            d_depth = req->getAccessDepth();
+            for(int i = 0; i < 4; i++){
+                d_writebacks[i] = req->writebacks[i];
+            }
 
             panic_if(pkt.isError(), "Data fetch (%s) failed: %s",
                     pkt.getAddrRange().to_string(), pkt.print());
@@ -458,6 +476,9 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
     dcache_latency = 0;
 
     req->taskId(taskId());
+    for(int i = 0; i < 4; i++){
+        req->writebacks[i] = 0;
+    }
 
     Addr frag_addr = addr;
     int frag_size = 0;
@@ -473,7 +494,7 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
         // translate to physical address
         if (predicate)
             fault = thread->mmu->translateAtomic(req, thread->getTC(),
-                                                 BaseMMU::Write);
+                                                 BaseMMU::Write, dw_depths, dw_addrs);
 
         // Now do the access.
         if (predicate && fault == NoFault) {
@@ -505,6 +526,12 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
                     threadSnoop(&pkt, curThread);
                 }
                 dcache_access = true;
+                d_addr = addr;
+                d_size = size;
+                d_depth = req->getAccessDepth();
+                for(int i = 0; i < 4; i++){
+                    d_writebacks[i] = req->writebacks[i];
+                }
                 panic_if(pkt.isError(), "Data write (%s) failed: %s",
                         pkt.getAddrRange().to_string(), pkt.print());
                 if (req->isSwap()) {
@@ -546,6 +573,7 @@ Fault
 AtomicSimpleCPU::amoMem(Addr addr, uint8_t* data, unsigned size,
                         Request::Flags flags, AtomicOpFunctorPtr amo_op)
 {
+    // atomic memory Operations
     SimpleExecContext &t_info = *threadInfo[curThread];
     SimpleThread *thread = t_info.thread;
 
@@ -574,10 +602,13 @@ AtomicSimpleCPU::amoMem(Addr addr, uint8_t* data, unsigned size,
     req->taskId(taskId());
     req->setVirt(addr, size, flags, dataRequestorId(),
                  thread->pcState().instAddr(), std::move(amo_op));
+    for(int i = 0; i < 4; i++){
+        req->writebacks[i] = 0;
+    }
 
     // translate to physical address
     Fault fault = thread->mmu->translateAtomic(
-        req, thread->getTC(), BaseMMU::Write);
+        req, thread->getTC(), BaseMMU::Write, dw_depths, dw_addrs);
 
     // Now do the access.
     if (fault == NoFault && !req->getFlags().isSet(Request::NO_ACCESS)) {
@@ -593,6 +624,12 @@ AtomicSimpleCPU::amoMem(Addr addr, uint8_t* data, unsigned size,
         }
 
         dcache_access = true;
+        d_addr = addr;
+        d_size = size;
+        d_depth = req->getAccessDepth();
+        for(int i = 0; i < 4; i++){
+            d_writebacks[i] = req->writebacks[i];
+        }
 
         panic_if(pkt.isError(), "Atomic access (%s) failed: %s",
                 pkt.getAddrRange().to_string(), pkt.print());
@@ -651,18 +688,38 @@ AtomicSimpleCPU::tick()
 
         const PCStateBase &pc = thread->pcState();
 
+        for(int i = 0; i < 4; i++){
+            i_writebacks[i] = 0;
+            iw_depths[i] = -1;
+            iw_addrs[i] = 0;
+        }
+
         bool needToFetch = !isRomMicroPC(pc.microPC()) && !curMacroStaticInst;
         if (needToFetch) {
+            for(int i = 0; i < 4; i++){
+                ifetch_req->writebacks[i] = 0;
+            }
             ifetch_req->taskId(taskId());
             setupFetchRequest(ifetch_req);
             fault = thread->mmu->translateAtomic(ifetch_req, thread->getTC(),
-                                                 BaseMMU::Execute);
+                                                 BaseMMU::Execute, iw_depths, iw_addrs);
         }
 
         if (fault == NoFault) {
             Tick icache_latency = 0;
             bool icache_access = false;
             dcache_access = false; // assume no dcache access
+
+            i_depth = 0;
+
+            d_addr = 0;
+            d_size = 0;
+            d_depth = 0;
+            for(int i = 0; i < 4; i++){
+                d_writebacks[i] = 0;
+                dw_depths[i] = -1;
+                dw_addrs[i] = 0;
+            }
 
             if (needToFetch) {
                 // This is commented out because the decoder would act like
@@ -674,6 +731,10 @@ AtomicSimpleCPU::tick()
                 //{
                     icache_access = true;
                     icache_latency = fetchInstMem();
+                    i_depth = ifetch_req->getAccessDepth();
+                    for(int i = 0; i < 4; i++){
+                        i_writebacks[i] = ifetch_req->writebacks[i];
+                    }
                 //}
             }
 
@@ -686,6 +747,7 @@ AtomicSimpleCPU::tick()
                 // keep an instruction count
                 if (fault == NoFault) {
                     countInst();
+                    // dumpInst(curStaticInst);
                     ppCommit->notify(std::make_pair(thread, curStaticInst));
                 } else if (traceData) {
                     traceFault();
@@ -770,5 +832,66 @@ AtomicSimpleCPU::printAddr(Addr a)
 {
     dcachePort.printAddr(a);
 }
+
+// void AtomicSimpleCPU::dumpInst(StaticInstPtr inst, TheISA::PCState &pc) {
+//   if (inst->isStore() || inst->isAtomic())
+//     fprintf(tptr, "0 ");
+//   else
+//     fprintf(tptr, "-1 ");
+//   fprintf(tptr, "0 0 0 ");
+//   fprintf(tptr, "%d %d %d %d %d %d %d %d ", inst->opClass(), inst->isMicroop(),
+//           inst->isCondCtrl(), inst->isUncondCtrl(), inst->isDirectCtrl(),
+//           inst->isSquashAfter(), inst->isSerializeAfter(),
+//           inst->isSerializeBefore());
+//   fprintf(tptr, "%d %d %d %d %d  ", inst->isAtomic(),
+//           inst->isStoreConditional(), inst->isMemBarrier(), inst->isQuiesce(),
+//           inst->isNonSpeculative());
+
+//   fprintf(tptr, " %d %lu %u %d", dcache_access, dcache_access ? d_addr : 0,
+//           dcache_access ? d_size : 0, d_depth);
+//   for (int i = 1; i < 4; i++) {
+//     fprintf(tptr, " %d", dw_depths[i]);
+//   }
+//   for (int i = 1; i < 4; i++) {
+//     fprintf(tptr, " %lu", dw_addrs[i]);
+//   }
+//   assert(d_writebacks[3] == 0);
+//   for (int i = 0; i < 3; i++) {
+//     fprintf(tptr, " %d", d_writebacks[i]);
+//   }
+
+//   fprintf(tptr, "  %lu %d %d %d", pc.instAddr(), pc.branching(), mis_pred,
+//           i_depth);
+//   assert(iw_depths[0] == -1 && dw_depths[0] == -1);
+//   for (int i = 1; i < 4; i++) {
+//     fprintf(tptr, " %d", iw_depths[i]);
+//   }
+//   for (int i = 1; i < 4; i++) {
+//     fprintf(tptr, " %lu", iw_addrs[i]);
+//   }
+//   assert(i_writebacks[0] == 0 && i_writebacks[3] == 0);
+//   for (int i = 1; i < 3; i++) {
+//     fprintf(tptr, " %d", i_writebacks[i]);
+//   }
+
+//   fprintf(tptr, "  %d %d ", inst->numSrcRegs(), inst->numDestRegs());
+//   for (int i = 0; i < inst->numSrcRegs(); i++) {
+//     fprintf(tptr, " %d %hu", inst->srcRegIdx(i).classValue(),
+//             inst->srcRegIdx(i).index());
+//   }
+//   fprintf(tptr, " ");
+//   for (int i = 0; i < inst->numDestRegs(); i++) {
+//     fprintf(tptr, " %d %hu", inst->destRegIdx(i).classValue(),
+//             inst->destRegIdx(i).index());
+//   }
+//   fprintf(tptr, "\n");
+//   //if (d_depth>0)
+//   //printf("%lu %d\n", instCnt, d_depth);
+//   //SimpleExecContext& t_info = *threadInfo[curThread];
+//   //SimpleThread* thread = t_info.thread;
+//   //if (mis_pred)
+//   //if (inst->isUncondCtrl())
+//   //printf("%lu %d %lx %lx %lx\n", instCnt, mis_pred, t_info.predPC.instAddr(), thread->pcState().instAddr(), pc);
+// }
 
 } // namespace gem5

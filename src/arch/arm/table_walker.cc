@@ -136,6 +136,10 @@ TableWalker::WalkerState::WalkerState() :
     mode(BaseMMU::Read), tranType(MMU::NormalTran), l2Desc(l1Desc),
     delayed(false), tableWalker(nullptr)
 {
+    for(int i = 0; i < 4; i++){
+        depthByLevel[i] = -1;
+        addrByLevel[i] = 0;
+    }
 }
 
 TableWalker::Port::Port(TableWalker& _walker, RequestorID id)
@@ -1869,6 +1873,23 @@ TableWalker::doLongDescriptor()
                 currState->fault = generateLongDescFault(fault_source);
             } else {
                 insertTableEntry(currState->longDesc, true);
+
+                TlbEntry::Lookup lookup_data;
+                lookup_data.va = currState->vaddr;
+                lookup_data.asn = currState->asid;
+                lookup_data.vmid = currState->vmid;
+                lookup_data.hyp = currState->isHyp;
+                lookup_data.secure = currState->isSecure;
+                lookup_data.functional = true;
+                lookup_data.ignoreAsn = false;
+                lookup_data.targetEL = currState->el;
+
+                TlbEntry *te = tlb->lookup(lookup_data);
+                assert(te);
+                for(int i = 0; i < 4; i++){
+                    te->walkDepth[i] = currState->depthByLevel[i];
+                    te->walkAddr[i] = currState->addrByLevel[i];
+                }
             }
         }
         return;
@@ -1949,6 +1970,7 @@ TableWalker::doLongDescriptor()
             }
 
             bool delayed;
+            currState->addrByLevel[L] = next_desc_addr;
             delayed = fetchDescriptor(next_desc_addr, (uint8_t*)&currState->longDesc.data,
                                       sizeof(uint64_t), flag, -1, event,
                                       &TableWalker::doLongDescriptor);
@@ -2221,6 +2243,8 @@ TableWalker::fetchDescriptor(Addr descAddr, uint8_t *data, int numBytes,
     Request::Flags flags, int queueIndex, Event *event,
     void (TableWalker::*doDescriptor)())
 {
+    currState->addrByLevel[currState->longDesc.lookupLevel] = descAddr; 
+
     bool isTiming = currState->timing;
 
     DPRINTF(PageTableWalker,
@@ -2277,6 +2301,8 @@ TableWalker::fetchDescriptor(Addr descAddr, uint8_t *data, int numBytes,
         } else if (!currState->functional) {
             port->sendAtomicReq(descAddr, numBytes, data, flags,
                 currState->tc->getCpuPtr()->clockPeriod());
+
+            currState->depthByLevel[currState->longDesc.lookupLevel] = LastDepth;
 
             (this->*doDescriptor)();
         } else {

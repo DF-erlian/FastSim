@@ -150,7 +150,7 @@ class DmaPort : public RequestPort, public Drainable
      * @param delay Additional delay for scheduling the completion event
      */
     void handleRespPacket(PacketPtr pkt, Tick delay=0);
-    void handleResp(DmaReqState *state, Addr addr, Addr size, Tick delay=0);
+    void handleResp(DmaReqState *state, Addr addr, Addr size, int accessdepth, Tick delay=0);
 
   public:
     /** The device that owns this port. */

@@ -869,7 +869,8 @@ Fault
 MMU::translateMmuOn(ThreadContext* tc, const RequestPtr &req, Mode mode,
                     Translation *translation, bool &delay, bool timing,
                     bool functional, Addr vaddr,
-                    ArmFault::TranMethod tranMethod, CachedState &state)
+                    ArmFault::TranMethod tranMethod, CachedState &state,
+                    TlbEntry **tep)
 {
     TlbEntry *te = NULL;
     bool is_fetch  = (mode == Execute);
@@ -880,6 +881,10 @@ MMU::translateMmuOn(ThreadContext* tc, const RequestPtr &req, Mode mode,
 
     Fault fault = getResultTe(&te, req, tc, mode, translation, timing,
                               functional, &mergeTe, state);
+
+    if(tep){
+        *tep = te;
+    }
     // only proceed if we have a valid table entry
     if (!isCompleteTranslation(te) && (fault == NoFault)) delay = true;
 
@@ -941,7 +946,7 @@ Fault
 MMU::translateFs(const RequestPtr &req, ThreadContext *tc, Mode mode,
         Translation *translation, bool &delay, bool timing,
         ArmTranslationType tran_type, bool functional,
-        CachedState &state)
+        CachedState &state, TlbEntry **tep)
 {
     // No such thing as a functional timing access
     assert(!(timing && functional));
@@ -1010,7 +1015,7 @@ MMU::translateFs(const RequestPtr &req, ThreadContext *tc, Mode mode,
                 state.isStage2 ? "IPA" : "VA", vaddr_tainted, state.asid);
         // Translation enabled
         fault = translateMmuOn(tc, req, mode, translation, delay, timing,
-                               functional, vaddr, tranMethod, state);
+                               functional, vaddr, tranMethod, state, tep);
     }
 
     // Check for Debug Exceptions
@@ -1025,22 +1030,37 @@ MMU::translateFs(const RequestPtr &req, ThreadContext *tc, Mode mode,
 
 Fault
 MMU::translateAtomic(const RequestPtr &req, ThreadContext *tc, Mode mode,
-    ArmTranslationType tran_type)
+    ArmTranslationType tran_type, int *depths, Addr *addrs)
 {
-    return translateAtomic(req, tc, mode, tran_type, false);
+    return translateAtomic(req, tc, mode, tran_type, false, depths, addrs);
 }
 
 Fault
 MMU::translateAtomic(const RequestPtr &req, ThreadContext *tc, Mode mode,
-    ArmTranslationType tran_type, bool stage2)
+    ArmTranslationType tran_type, bool stage2, int *depths, Addr *addrs)
 {
     auto& state = updateMiscReg(tc, tran_type, stage2);
 
     bool delay = false;
     Fault fault;
-    if (FullSystem)
+    // if (FullSystem)
+    //     fault = translateFs(req, tc, mode, NULL, delay, false,
+    //         tran_type, false, state);
+    TlbEntry *tev = NULL;
+    TlbEntry **tep = &tev;
+    if (FullSystem){
         fault = translateFs(req, tc, mode, NULL, delay, false,
-            tran_type, false, state);
+             tran_type, false, state, tep);
+        if(*tep && depths && addrs){
+            assert(req->hasPaddr());
+            for (int i = 0; i < 4; i++) {
+                depths[i] = (*tep)->walkDepth[i];
+                addrs[i] = (*tep)->walkAddr[i];
+                (*tep)->walkDepth[i] = -1;
+                (*tep)->walkAddr[i] = 0;
+            }
+        }
+    }
     else
         fault = translateSe(req, tc, mode, NULL, delay, false, state);
     assert(!delay);

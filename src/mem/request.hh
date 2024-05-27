@@ -1119,6 +1119,13 @@ class Request : public Extensible<Request>
     bool isCacheInvalidate() const { return _flags.isSet(INVALIDATE); }
     bool isCacheMaintenance() const { return _flags.isSet(CLEAN|INVALIDATE); }
     /** @} */
+
+    //writebacks in the cache hierarchy
+    int writebacks[4] = {0, 0, 0, 0};
+    void incWriteback(int wb){
+        assert(depth < 4);
+        writebacks[depth] += wb;
+    }
 };
 
 } // namespace gem5

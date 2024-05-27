@@ -45,12 +45,12 @@
 #include <cstring>
 #include <utility>
 
+#include "arch/arm/table_walker.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
 #include "debug/DMA.hh"
 #include "debug/Drain.hh"
 #include "sim/clocked_object.hh"
-#include "sim/system.hh"
 
 namespace gem5
 {
@@ -74,13 +74,13 @@ DmaPort::handleRespPacket(PacketPtr pkt, Tick delay)
     auto *state = dynamic_cast<DmaReqState*>(pkt->senderState);
     assert(state);
 
-    handleResp(state, pkt->getAddr(), pkt->req->getSize(), delay);
+    handleResp(state, pkt->getAddr(), pkt->req->getSize(), pkt->req->getAccessDepth(), delay);
 
     delete pkt;
 }
 
 void
-DmaPort::handleResp(DmaReqState *state, Addr addr, Addr size, Tick delay)
+DmaPort::handleResp(DmaReqState *state, Addr addr, Addr size, int accessdepth, Tick delay)
 {
     assert(pendingCount != 0);
     pendingCount--;
@@ -112,6 +112,9 @@ DmaPort::handleResp(DmaReqState *state, Addr addr, Addr size, Tick delay)
     } else if (all_bytes) {
         // If we have reached the end of this DMA request, then signal the
         // completion and delete the sate.
+        if (ArmISA::TableWalker *walker_device =
+                dynamic_cast<ArmISA::TableWalker *>(device))
+          walker_device->LastDepth = accessdepth;
         if (state->completionEvent) {
             delay += state->delay;
             device->schedule(state->completionEvent, curTick() + delay);
@@ -375,7 +378,8 @@ DmaPort::sendAtomicBdReq(DmaReqState *state)
 
         // Check if we're done now, since handleResp may delete state.
         done = !state->gen.next();
-        handleResp(state, state->gen.addr(), handled);
+        //question
+        handleResp(state, state->gen.addr(), handled, 0);
     }
 
     return done;

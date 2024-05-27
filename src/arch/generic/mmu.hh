@@ -111,9 +111,14 @@ class BaseMMU : public SimObject
 
     void demapPage(Addr vaddr, uint64_t asn);
 
+    // virtual Fault
+    // translateAtomic(const RequestPtr &req, ThreadContext *tc,
+    //                 Mode mode);
+    
     virtual Fault
     translateAtomic(const RequestPtr &req, ThreadContext *tc,
-                    Mode mode);
+                    Mode mode, 
+                    int* depths = NULL, Addr *addrs = NULL);
 
     virtual void
     translateTiming(const RequestPtr &req, ThreadContext *tc,
