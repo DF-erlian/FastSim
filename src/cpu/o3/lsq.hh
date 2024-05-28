@@ -580,7 +580,8 @@ class LSQ
         virtual void markAsStaleTranslation();
         virtual void initiateTranslation();
         virtual void finish(const Fault &fault, const RequestPtr &req,
-                gem5::ThreadContext* tc, BaseMMU::Mode mode);
+                gem5::ThreadContext* tc, BaseMMU::Mode mode,
+                int *depths = NULL, Addr *addrs = NULL);
         virtual bool recvTimingResp(PacketPtr pkt);
         virtual void sendPacketToCache();
         virtual void buildPackets();
@@ -603,7 +604,8 @@ class LSQ
         virtual void initiateTranslation();
         virtual void markAsStaleTranslation();
         virtual void finish(const Fault &fault, const RequestPtr &req,
-                gem5::ThreadContext* tc, BaseMMU::Mode mode);
+                gem5::ThreadContext* tc, BaseMMU::Mode mode,
+                int *depths = NULL, Addr *addrs = NULL);
         virtual std::string
         name() const
         {
@@ -645,7 +647,8 @@ class LSQ
         }
         virtual void markAsStaleTranslation();
         virtual void finish(const Fault &fault, const RequestPtr &req,
-                gem5::ThreadContext* tc, BaseMMU::Mode mode);
+                gem5::ThreadContext* tc, BaseMMU::Mode mode,
+                int *depths = NULL, Addr *addrs = NULL);
         virtual bool recvTimingResp(PacketPtr pkt);
         virtual void initiateTranslation();
         virtual void sendPacketToCache();

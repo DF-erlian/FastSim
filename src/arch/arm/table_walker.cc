@@ -525,8 +525,9 @@ TableWalker::processWalkWrapper()
 
         if (f != NoFault) {
             curr_state_copy->transState->finish(f, curr_state_copy->req,
-                    curr_state_copy->tc, curr_state_copy->mode);
-
+                    curr_state_copy->tc, curr_state_copy->mode,
+                    curr_state_copy->depthByLevel, curr_state_copy->addrByLevel);
+            
             delete curr_state_copy;
         }
         return;
@@ -1804,6 +1805,7 @@ TableWalker::generateLongDescFault(ArmFault::FaultSource src)
 void
 TableWalker::doLongDescriptor()
 {
+    currState->depthByLevel[currState->longDesc.lookupLevel] = LastDepth;
     if (currState->fault != NoFault) {
         return;
     }
@@ -1970,7 +1972,7 @@ TableWalker::doLongDescriptor()
             }
 
             bool delayed;
-            currState->addrByLevel[L] = next_desc_addr;
+            // currState->addrByLevel[L] = next_desc_addr;
             delayed = fetchDescriptor(next_desc_addr, (uint8_t*)&currState->longDesc.data,
                                       sizeof(uint64_t), flag, -1, event,
                                       &TableWalker::doLongDescriptor);
@@ -2192,7 +2194,9 @@ TableWalker::doLongDescriptorWrapper(LookupLevel curr_lookup_level)
     if (currState->fault != NoFault) {
         // A fault was generated
         currState->transState->finish(currState->fault, currState->req,
-                                      currState->tc, currState->mode);
+                                      currState->tc, currState->mode,
+                                      currState->depthByLevel,
+                                      currState->addrByLevel);
 
         pending = false;
         nextWalk(currState->tc);
@@ -2302,7 +2306,7 @@ TableWalker::fetchDescriptor(Addr descAddr, uint8_t *data, int numBytes,
             port->sendAtomicReq(descAddr, numBytes, data, flags,
                 currState->tc->getCpuPtr()->clockPeriod());
 
-            currState->depthByLevel[currState->longDesc.lookupLevel] = LastDepth;
+            // currState->depthByLevel[currState->longDesc.lookupLevel] = LastDepth;
 
             (this->*doDescriptor)();
         } else {
@@ -2574,7 +2578,7 @@ TableWalker::Stage2Walk::Stage2Walk(TableWalker &_parent,
 void
 TableWalker::Stage2Walk::finish(const Fault &_fault,
                                 const RequestPtr &req,
-                                ThreadContext *tc, BaseMMU::Mode mode)
+                                ThreadContext *tc, BaseMMU::Mode mode, int *depths, Addr *addrs)
 {
     fault = _fault;
 

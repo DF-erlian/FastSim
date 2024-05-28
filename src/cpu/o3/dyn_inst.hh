@@ -140,6 +140,9 @@ class DynInst : public ExecContext, public RefCounted
     /** InstRecord that tracks this instructions. */
     trace::InstRecord *traceData = nullptr;
 
+    Tick in_rob_tick;
+    Tick out_rob_tick;
+
   protected:
     enum Status
     {
@@ -764,7 +767,7 @@ class DynInst : public ExecContext, public RefCounted
     bool isExecuted() const { return status[Executed]; }
 
     /** Sets this instruction as ready to commit. */
-    void setCanCommit() { status.set(CanCommit); }
+    void setCanCommit() { status.set(CanCommit); out_rob_tick = curTick(); }
 
     /** Clears this instruction as being ready to commit. */
     void clearCanCommit() { status.reset(CanCommit); }
@@ -996,6 +999,15 @@ class DynInst : public ExecContext, public RefCounted
     int32_t commitTick = -1;
     int32_t storeTick = -1;
 #endif
+    // For instruction tracing.
+    int cachedepth = 0;
+    int fetchdepth = 0;
+    int iwalkDepth[4] = {-1, -1, -1, -1};
+    int dwalkDepth[4] = {-1, -1, -1, -1};
+    Addr iwalkAddr[4] = {0, 0, 0, 0};
+    Addr dwalkAddr[4] = {0, 0, 0, 0};
+    int iWritebacks[4] = {0, 0, 0, 0};
+    int dWritebacks[4] = {0, 0, 0, 0};
 
     /* Values used by LoadToUse stat */
     Tick firstIssue = -1;

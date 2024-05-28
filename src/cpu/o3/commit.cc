@@ -130,6 +130,10 @@ Commit::Commit(CPU *_cpu, const BaseO3CPUParams &params)
         htmStops[tid] = 0;
     }
     interrupt = NoFault;
+    // Open file trace.txt in write mode.
+    tptr = fopen("trace.txt", "w");
+    if (tptr == NULL)
+        printf("Could not open trace file.\n");
 }
 
 std::string Commit::name() const { return cpu->name() + ".commit"; }
@@ -1214,6 +1218,7 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         DPRINTF(Commit,
             "[tid:%i] [sn:%llu] Committing instruction with fault\n",
             tid, head_inst->seqNum);
+        dumpInst(head_inst);
         if (head_inst->traceData) {
             // We ignore ReExecution "faults" here as they are not real
             // (architectural) faults but signal flush/replays.

@@ -269,7 +269,7 @@ LSQ::clearMemBarrier(MinorDynInstPtr inst)
 
 void
 LSQ::SingleDataRequest::finish(const Fault &fault_, const RequestPtr &request_,
-                               ThreadContext *tc, BaseMMU::Mode mode)
+                               ThreadContext *tc, BaseMMU::Mode mode, int *depths, Addr *addrs)
 {
     port.numAccessesInDTLB--;
 
@@ -332,7 +332,7 @@ LSQ::SingleDataRequest::retireResponse(PacketPtr packet_)
 
 void
 LSQ::SplitDataRequest::finish(const Fault &fault_, const RequestPtr &request_,
-                              ThreadContext *tc, BaseMMU::Mode mode)
+                              ThreadContext *tc, BaseMMU::Mode mode, int *depths, Addr *addrs)
 {
     port.numAccessesInDTLB--;
 

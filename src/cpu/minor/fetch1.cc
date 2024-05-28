@@ -238,7 +238,8 @@ Fetch1::FetchRequest::makePacket()
 
 void
 Fetch1::FetchRequest::finish(const Fault &fault_, const RequestPtr &request_,
-                             ThreadContext *tc, BaseMMU::Mode mode)
+                             ThreadContext *tc, BaseMMU::Mode mode,
+                             int *depths, Addr *addrs)
 {
     fault = fault_;
 

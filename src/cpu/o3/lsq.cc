@@ -397,6 +397,13 @@ LSQ::completeDataAccess(PacketPtr pkt)
     LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
     thread[cpu->contextToThread(request->contextId())]
         .completeDataAccess(pkt);
+
+    //record cache hit level info
+    DynInstPtr inst = request->_inst;
+    inst->cachedepth = pkt->req->getAccessDepth();
+    for(int i = 0; i < 4; i++){
+        inst->dWritebacks[i] = pkt->req->writebacks[i];
+    }
 }
 
 bool
@@ -869,7 +876,8 @@ LSQ::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
 void
 LSQ::SingleDataRequest::finish(const Fault &fault, const RequestPtr &request,
-        gem5::ThreadContext* tc, BaseMMU::Mode mode)
+        gem5::ThreadContext* tc, BaseMMU::Mode mode,
+        int *depths, Addr *addrs)
 {
     _fault.push_back(fault);
     numInTranslationFragments = 0;
@@ -896,12 +904,21 @@ LSQ::SingleDataRequest::finish(const Fault &fault, const RequestPtr &request,
 
         LSQRequest::_inst->fault = fault;
         LSQRequest::_inst->translationCompleted(true);
+        
+        if(depths){
+            assert(addrs);
+            for(int i = 0; i < 4; i++){
+                _inst->dwalkDepth[i] = depths[i];
+                _inst->dwalkAddr[i] = addrs[i];
+            }
+        }
     }
 }
 
 void
 LSQ::SplitDataRequest::finish(const Fault &fault, const RequestPtr &req,
-        gem5::ThreadContext* tc, BaseMMU::Mode mode)
+        gem5::ThreadContext* tc, BaseMMU::Mode mode,
+        int *depths, Addr *addrs)
 {
     int i;
     for (i = 0; i < _reqs.size() && _reqs[i] != req; i++);
@@ -941,6 +958,13 @@ LSQ::SplitDataRequest::finish(const Fault &fault, const RequestPtr &req,
             } else {
                 _inst->fault = _fault[0];
                 setState(State::Fault);
+            }
+            if(depths){
+                assert(addrs);
+                for(int i = 0; i < 4; i++){
+                    _inst->dwalkDepth[i] = depths[i];
+                    _inst->dwalkAddr[i] = addrs[i];
+                }
             }
         }
 
@@ -1487,7 +1511,8 @@ LSQ::UnsquashableDirectRequest::markAsStaleTranslation()
 void
 LSQ::UnsquashableDirectRequest::finish(const Fault &fault,
         const RequestPtr &req, gem5::ThreadContext* tc,
-        BaseMMU::Mode mode)
+        BaseMMU::Mode mode,
+        int *depths, Addr *addrs)
 {
     panic("unexpected behaviour - finish()");
 }

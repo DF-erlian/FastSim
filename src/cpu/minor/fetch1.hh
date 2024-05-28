@@ -169,7 +169,8 @@ class Fetch1 : public Named
          *  the request on to the ports' handleTLBResponse member
          *  function */
         void finish(const Fault &fault_, const RequestPtr &request_,
-                    ThreadContext *tc, BaseMMU::Mode mode);
+                    ThreadContext *tc, BaseMMU::Mode mode,
+                    int *depths, Addr *addrs);
 
       public:
         FetchRequest(Fetch1 &fetch_, InstId id_, Addr pc_) :

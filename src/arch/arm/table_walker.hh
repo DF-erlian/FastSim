@@ -1002,7 +1002,7 @@ class TableWalker : public ClockedObject
         void markDelayed() {}
 
         void finish(const Fault &fault, const RequestPtr &req,
-            ThreadContext *tc, BaseMMU::Mode mode);
+            ThreadContext *tc, BaseMMU::Mode mode, int *depth, Addr *addr);
 
         void
         setVirt(Addr vaddr, int size, Request::Flags flags,

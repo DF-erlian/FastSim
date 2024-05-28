@@ -1126,9 +1126,12 @@ MMU::translateComplete(const RequestPtr &req, ThreadContext *tc,
 {
     bool delay = false;
     Fault fault;
+
+    TlbEntry *tev = NULL;
+    TlbEntry **tep = &tev;
     if (FullSystem)
         fault = translateFs(req, tc, mode, translation, delay, true, tran_type,
-            false, state);
+            false, state, tep);
     else
         fault = translateSe(req, tc, mode, translation, delay, true, state);
 
@@ -1143,8 +1146,25 @@ MMU::translateComplete(const RequestPtr &req, ThreadContext *tc,
 
     if (translation && (call_from_s2 || !state.stage2Req || req->hasPaddr() ||
         fault != NoFault)) {
-        if (!delay)
-            translation->finish(fault, req, tc, mode);
+        // if (!delay)
+        //     translation->finish(fault, req, tc, mode);
+        if(!delay){
+            int walkDepth[4];
+            Addr walkAddr[4];
+            if(*tep){
+                assert(req->hasPaddr());
+                for(int i = 0; i < 4; i++){
+                    walkDepth[i] = (*tep)->walkDepth[i];
+                    walkAddr[i] = (*tep)->walkAddr[i];
+                    (*tep)->walkAddr[i] = 0;
+                    (*tep)->walkDepth[i] = -1;
+                }
+                translation->finish(fault, req, tc, mode, walkDepth, walkAddr);
+            }
+            else{
+                translation->finish(fault, req, tc, mode);
+            }
+        }
         else
             translation->markDelayed();
     }
