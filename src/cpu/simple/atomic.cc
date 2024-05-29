@@ -38,6 +38,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include<algorithm>
 
 #include "cpu/simple/atomic.hh"
 
@@ -380,10 +381,6 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t *data, unsigned size,
 
     req->taskId(taskId());
 
-    for(int i = 0; i < 4; i++){
-        req->writebacks[i] = 0;
-    }
-
     Addr frag_addr = addr;
     int frag_size = 0;
     int size_left = size;
@@ -406,6 +403,11 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t *data, unsigned size,
             Packet pkt(req, Packet::makeReadCmd(req));
             pkt.dataStatic(data);
 
+            for(int i = 0; i < 4; i++){
+                req->writebacks[i] = 0;
+            }
+            req->clearAccessDepth();
+            
             if (req->isLocalAccess()) {
                 dcache_latency += req->localAccessor(thread->getTC(), &pkt);
             } else {
@@ -415,9 +417,9 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t *data, unsigned size,
 
             d_addr = addr;
             d_size = size;
-            d_depth = req->getAccessDepth();
+            d_depth = std::max(d_depth, req->getAccessDepth());
             for(int i = 0; i < 4; i++){
-                d_writebacks[i] = req->writebacks[i];
+                d_writebacks[i] = std::max(d_writebacks[i], req->writebacks[i]);
             }
 
             panic_if(pkt.isError(), "Data fetch (%s) failed: %s",
@@ -476,9 +478,6 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
     dcache_latency = 0;
 
     req->taskId(taskId());
-    for(int i = 0; i < 4; i++){
-        req->writebacks[i] = 0;
-    }
 
     Addr frag_addr = addr;
     int frag_size = 0;
@@ -516,6 +515,11 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
                 Packet pkt(req, Packet::makeWriteCmd(req));
                 pkt.dataStatic(data);
 
+                for(int i = 0; i < 4; i++){
+                    req->writebacks[i] = 0;
+                }
+                req->clearAccessDepth();
+
                 if (req->isLocalAccess()) {
                     dcache_latency +=
                         req->localAccessor(thread->getTC(), &pkt);
@@ -528,9 +532,9 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
                 dcache_access = true;
                 d_addr = addr;
                 d_size = size;
-                d_depth = req->getAccessDepth();
+                d_depth = std::max(d_depth, req->getAccessDepth());
                 for(int i = 0; i < 4; i++){
-                    d_writebacks[i] = req->writebacks[i];
+                    d_writebacks[i] = std::max(d_writebacks[i], req->writebacks[i]);
                 }
                 panic_if(pkt.isError(), "Data write (%s) failed: %s",
                         pkt.getAddrRange().to_string(), pkt.print());
@@ -605,6 +609,7 @@ AtomicSimpleCPU::amoMem(Addr addr, uint8_t* data, unsigned size,
     for(int i = 0; i < 4; i++){
         req->writebacks[i] = 0;
     }
+    req->clearAccessDepth();
 
     // translate to physical address
     Fault fault = thread->mmu->translateAtomic(
@@ -693,12 +698,15 @@ AtomicSimpleCPU::tick()
             iw_depths[i] = -1;
             iw_addrs[i] = 0;
         }
+        bool need_dump = false;
+        mis_pred = false;
 
         bool needToFetch = !isRomMicroPC(pc.microPC()) && !curMacroStaticInst;
         if (needToFetch) {
             for(int i = 0; i < 4; i++){
                 ifetch_req->writebacks[i] = 0;
             }
+            ifetch_req->clearAccessDepth();
             ifetch_req->taskId(taskId());
             setupFetchRequest(ifetch_req);
             fault = thread->mmu->translateAtomic(ifetch_req, thread->getTC(),
@@ -748,6 +756,7 @@ AtomicSimpleCPU::tick()
                 if (fault == NoFault) {
                     countInst();
                     // dumpInst(curStaticInst);
+                    need_dump = true;
                     ppCommit->notify(std::make_pair(thread, curStaticInst));
                 } else if (traceData) {
                     traceFault();
@@ -787,6 +796,9 @@ AtomicSimpleCPU::tick()
         }
         if (fault != NoFault || !t_info.stayAtPC)
             advancePC(fault);
+        if(need_dump){
+            // dumpInst(curStaticInst);
+        }
     }
 
     if (tryCompleteDrain())

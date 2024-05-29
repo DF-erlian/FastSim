@@ -398,12 +398,6 @@ LSQ::completeDataAccess(PacketPtr pkt)
     thread[cpu->contextToThread(request->contextId())]
         .completeDataAccess(pkt);
 
-    //record cache hit level info
-    DynInstPtr inst = request->_inst;
-    inst->cachedepth = pkt->req->getAccessDepth();
-    for(int i = 0; i < 4; i++){
-        inst->dWritebacks[i] = pkt->req->writebacks[i];
-    }
 }
 
 bool
@@ -1216,6 +1210,12 @@ LSQ::SingleDataRequest::recvTimingResp(PacketPtr pkt)
     flags.set(Flag::Complete);
     assert(pkt == _packets.front());
     _port.completeDataAccess(pkt);
+
+    // Record cache hit level info.
+    _inst->cachedepth = pkt->req->getAccessDepth();
+    for (int i = 0; i < 4; i++)
+        _inst->dWritebacks[i] = pkt->req->writebacks[i];
+
     _hasStaleTranslation = false;
     return true;
 }
@@ -1242,6 +1242,12 @@ LSQ::SplitDataRequest::recvTimingResp(PacketPtr pkt)
         _port.completeDataAccess(resp);
         delete resp;
     }
+
+    // Record cache hit level info.
+    _inst->cachedepth = std::max(_inst->cachedepth, pkt->req->getAccessDepth());
+    for (int i = 0; i < 4; i++)
+        _inst->dWritebacks[i] = std::max(_inst->dWritebacks[i], pkt->req->writebacks[i]);
+
     _hasStaleTranslation = false;
     return true;
 }

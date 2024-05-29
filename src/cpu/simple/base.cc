@@ -524,6 +524,7 @@ BaseSimpleCPU::advancePC(const Fault &fault)
             branchPred->squash(cur_sn, thread->pcState(), branching,
                     curThread);
             ++t_info.execContextStats.numBranchMispred;
+            mis_pred = true;
         }
     }
 }

@@ -1126,6 +1126,7 @@ class Request : public Extensible<Request>
         assert(depth < 4);
         writebacks[depth] += wb;
     }
+    void clearAccessDepth() { depth = 0; }
 };
 
 } // namespace gem5
