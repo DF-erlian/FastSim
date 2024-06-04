@@ -455,5 +455,69 @@ DynInst::initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
             std::move(amo_op), std::vector<bool>(size, true));
 }
 
+void
+DynInst::dumpInsts(FILE *tptr){
+    fprintf(tptr, "%lu %lu %lu ", fetchTick, this->out_rob_tick - fetchTick, commitTick);
+
+    //op
+    fprintf(tptr, "%d ", this->opClass());
+
+    //register
+    fprintf(tptr, "%lu ", this->numSrcRegs());
+    for(int i = 0; i < this->numSrcRegs(); i++){
+        fprintf(tptr, "%d %d ", this->srcRegIdx(i).classValue(), this->srcRegIdx(i).index());
+    }
+
+    fprintf(tptr, "%lu ", this->numDestRegs());
+    for(int i = 0; i < this->numDestRegs(); i++){
+        fprintf(tptr, "%d %d ", this->destRegIdx(i).classValue(), this->destRegIdx(i).index());
+    }
+
+    //mem address
+    fprintf(tptr, "%lu ", this->effAddrValid() ? this->physEffAddr : 0);
+    
+    //branch
+    fprintf(tptr, "%lu %d %d", this->pc->instAddr(), this->isControl(), this->mispredicted());
+
+    fprintf(tptr, "\n");
+
+    // //static op feature
+    // fprintf(tptr, "%d %d %d %d %d ", this->opClass(), this->isInteger(), this->isFloating(), this->isMacroop(), this->isMicroop());
+    
+    // fprintf(tptr, "%d %d %d %d %d %d ", this->isControl(), this->isCall(), this->isReturn(), this->isCondCtrl(), this->isDirectCtrl(), this->isSyscall());
+    // fprintf(tptr, "%d %d %d ", this->isSerializeBefore(), this->isSerializeAfter(), this->isSquashAfter());
+    
+    // //static mem feature
+    // fprintf(tptr, "%d %d %d %d %d %d %d %d %d ", this->isMemRef(), this->isLoad(), this->isStore(), this->isAtomic(), this->isStoreConditional(),  
+    //         this->isReadBarrier(), this->isWriteBarrier(), this->isNonSpeculative(), this->isHtmCmd());
+    
+    // //dyn mem feature
+    // //icache
+    // fprintf(tptr, "%d %d %d ", this->pcState().branching(), this->mispredicted(), this->fetchdepth); 
+    
+    // assert(iwalkDepth[0] == -1 && dwalkDepth[0] == -1);
+    // for(int i = 0; i < 4; i++){
+    //     fprintf(tptr, "%d ", iwalkDepth[i]);
+    // }
+    // for(int i = 0; i < 4; i++){
+    //     fprintf(tptr, "%d ", iWritebacks[i]);
+    // }
+
+    // //dcache
+    // fprintf(tptr, "%d %d %d ", this->effAddrValid(), 
+    //                     this->effAddrValid() ? this->effSize : 0, 
+    //                     cachedepth);
+
+    // for(int i = 0; i < 4; i++){
+    //     fprintf(tptr, "%d ", dwalkDepth[i]);
+    // }
+    // for(int i = 0; i < 4; i++){
+    //     fprintf(tptr, "%d ", dWritebacks[i]);
+    // }
+
+    // fprintf(tptr, "\n");
+
+}
+
 } // namespace o3
 } // namespace gem5

@@ -1190,7 +1190,7 @@ class TableWalker : public ClockedObject
                    LookupLevel lookup_level, bool stage2);
 
 public:
-    int LastDepth;
+    int LastDepth = -2;
 };
 
 } // namespace ArmISA

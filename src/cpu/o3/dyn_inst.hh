@@ -998,6 +998,9 @@ class DynInst : public ExecContext, public RefCounted
     int32_t completeTick = -1;
     int32_t commitTick = -1;
     int32_t storeTick = -1;
+#else
+    Tick fetchTick = -1;      // instruction fetch is completed.
+    int32_t commitTick = -1;
 #endif
     // For instruction tracing.
     int cachedepth = 0;
@@ -1008,6 +1011,9 @@ class DynInst : public ExecContext, public RefCounted
     Addr dwalkAddr[4] = {0, 0, 0, 0};
     int iWritebacks[4] = {0, 0, 0, 0};
     int dWritebacks[4] = {0, 0, 0, 0};
+
+    //Dump an instruction
+    void dumpInsts(FILE *tptr);
 
     /* Values used by LoadToUse stat */
     Tick firstIssue = -1;

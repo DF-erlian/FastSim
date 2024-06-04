@@ -131,11 +131,12 @@ Commit::Commit(CPU *_cpu, const BaseO3CPUParams &params)
     }
     interrupt = NoFault;
     // Open file trace.txt in write mode.
-    tptr = fopen("trace.txt", "w");
-    if (tptr == NULL)
+    tptr = fopen("trace_o3.txt", "w");
+    if (tptr == NULL){
         printf("Could not open trace file.\n");
+        assert(tptr == NULL);
+    }
 }
-
 std::string Commit::name() const { return cpu->name() + ".commit"; }
 
 void
@@ -1271,12 +1272,13 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
     // Finally clear the head ROB entry.
     rob->retireHead(tid);
 
-#if TRACING_ON
-    if (debug::O3PipeView) {
-        head_inst->commitTick = curTick() - head_inst->fetchTick;
-    }
-#endif
-
+// #if TRACING_ON
+    // if (debug::O3PipeView) {
+    //     head_inst->commitTick = curTick() - head_inst->fetchTick;
+    // }
+    head_inst->commitTick = curTick() - head_inst->fetchTick;
+// #endif
+    head_inst->dumpInsts(tptr);
     // If this was a store, record it for this cycle.
     if (head_inst->isStore() || head_inst->isAtomic())
         committedStores[tid] = true;

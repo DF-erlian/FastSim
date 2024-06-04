@@ -186,6 +186,11 @@ def create(args):
             interrupt_numbers = [args.pmu_ppi_number] * len(cluster)
             cluster.addPMUs(interrupt_numbers)
 
+    if args.maxinsts:
+        for j in range(len(system.cpu_cluster)):
+            for i in range(args.num_cores):
+                system.cpu_cluster[j].cpus[i].max_insts_all_threads = args.maxinsts
+            
     return system
 
 
@@ -276,7 +281,7 @@ def main():
         "--mem-size",
         action="store",
         type=str,
-        default="2GB",
+        default="4GB",
         help="Specify the physical memory size",
     )
     parser.add_argument(
@@ -304,6 +309,8 @@ def main():
     )
     parser.add_argument("--checkpoint", action="store_true")
     parser.add_argument("--restore", type=str, default=None)
+    
+    parser.add_argument("--maxinsts", type=int, default=0)
 
     args = parser.parse_args()
 

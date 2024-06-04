@@ -1261,12 +1261,12 @@ Fetch::fetch(bool &status_change)
             ppFetch->notify(instruction);
             numInst++;
 
-#if TRACING_ON
+// #if TRACING_ON
             // if (debug::O3PipeView) {
             //     instruction->fetchTick = curTick();
             // }
             instruction->fetchTick = curTick();
-#endif
+// #endif
             if (status_change && numInst == 1) {
                 instruction->fetchdepth = depth;
                 for (int i = 0; i < 4; i++) {
